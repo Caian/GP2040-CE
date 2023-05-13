@@ -95,32 +95,9 @@ FetchContent_MakeAvailable(ArduinoJson)
 # initialize the Raspberry Pi Pico SDK
 pico_sdk_init()
 add_subdirectory(lib)
-add_subdirectory(MPG)
 
 add_executable(${PROJECT_NAME}
 src/main.cpp
-src/gp2040.cpp
-src/gp2040aux.cpp
-src/gamepad.cpp
-src/addonmanager.cpp
-src/configmanager.cpp
-src/storagemanager.cpp
-src/system.cpp
-src/configs/webconfig.cpp
-src/addons/analog.cpp
-src/addons/board_led.cpp
-src/addons/bootsel_button.cpp
-src/addons/buzzerspeaker.cpp
-src/addons/dualdirectional.cpp
-src/addons/extra_button.cpp
-src/addons/i2canalog1219.cpp
-src/addons/jslider.cpp
-src/addons/i2cdisplay.cpp
-src/addons/neopicoleds.cpp
-src/addons/playernum.cpp
-src/addons/playerleds.cpp
-src/addons/reverse.cpp
-src/addons/turbo.cpp
 )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${PROJECT_NAME}_${CMAKE_PROJECT_VERSION}_${GP2040_BOARDCONFIG})
@@ -128,26 +105,20 @@ set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${PROJECT_NAME}_${C
 pico_set_program_name(GP2040-CE "GP2040-CE")
 pico_set_program_version(GP2040-CE "0.6.2")
 
-target_link_libraries(${PROJECT_NAME} 
-MPG
+pico_enable_stdio_usb(${PROJECT_NAME} 1)
+pico_enable_stdio_uart(${PROJECT_NAME} 0)
+
+target_link_libraries(${PROJECT_NAME}
 pico_stdlib
 pico_bootsel_via_double_reset
-AnimationStation
-TinyUSB_Gamepad
-FlashPROM
-ADS1219
-PlayerLEDs
-NeoPico
-OneBitDisplay
-CRC32
-ArduinoJson
-rndis
 hardware_adc
+BitBang_I2C
+FlashPROM
+CRC32
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
 headers
-headers/addons
 configs/${GP2040_BOARDCONFIG}
 )
 
