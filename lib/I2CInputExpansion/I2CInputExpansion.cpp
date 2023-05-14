@@ -25,7 +25,7 @@ void I2CInputExpansion::begin()
 
 void I2CInputExpansion::read()
 {
-    I2CRead(&_i2c, _i2c_addr, _buff, 32);
+    I2CReadRegister(&_i2c, _i2c_addr, 0, _buff, 32);
 }
 
 uint16_t I2CInputExpansion::get_value(unsigned int channel)
