@@ -13,7 +13,6 @@
 #include "hardware/watchdog.h"
 #include "Animation.hpp"
 #include "CRC32.h"
-#include <sstream>
 
 #include "addons/analog.h"
 #include "addons/board_led.h"
@@ -27,9 +26,12 @@
 #include "addons/jslider.h"
 #include "addons/neopicoleds.h"
 #include "addons/playernum.h"
+#include "addons/ps4mode.h"
 #include "addons/pleds.h"
 #include "addons/reverse.h"
 #include "addons/turbo.h"
+#include "addons/slider_socd.h"
+#include "addons/wiiext.h"
 
 #include "bitmaps.h"
 
@@ -63,9 +65,11 @@ void Storage::initSplashImage() {
 	}
 }
 
-BoardOptions Storage::getBoardOptions()
-{
-	return boardOptions;
+void Storage::initPS4Options() {
+	EEPROM.get(PS4_STORAGE_INDEX, ps4Options);
+	if (ps4Options.checksum != NOCHECKSUM_MAGIC) {
+		setDefaultPS4Options();
+	}
 }
 
 void Storage::setDefaultBoardOptions()
@@ -114,7 +118,7 @@ void Storage::setDefaultBoardOptions()
 		.buttonPadding = 2
 	};
 	boardOptions.buttonLayoutCustomOptions.params = params;
-	
+
 	ButtonLayoutParams paramsRight = {
 		.layoutRight = BUTTON_LAYOUT_RIGHT,
 		.startX = 8,
@@ -140,17 +144,14 @@ void Storage::setBoardOptions(BoardOptions options)
 	}
 }
 
-AddonOptions Storage::getAddonOptions()
-{
-	return addonOptions;
-}
-
 void Storage::setDefaultAddonOptions()
 {
 	addonOptions.pinButtonTurbo    		= PIN_BUTTON_TURBO;
 	addonOptions.pinButtonReverse  		= PIN_BUTTON_REVERSE;
 	addonOptions.pinSliderLS       		= PIN_SLIDER_LS;
 	addonOptions.pinSliderRS       		= PIN_SLIDER_RS;
+	addonOptions.pinSliderSOCDOne     	= PIN_SLIDER_SOCD_ONE;
+	addonOptions.pinSliderSOCDTwo    	= PIN_SLIDER_SOCD_TWO;
 	addonOptions.pinDualDirDown    		= PIN_DUAL_DIRECTIONAL_DOWN;
 	addonOptions.pinDualDirUp      		= PIN_DUAL_DIRECTIONAL_UP;
 	addonOptions.pinDualDirLeft    		= PIN_DUAL_DIRECTIONAL_LEFT;
@@ -185,6 +186,28 @@ void Storage::setDefaultAddonOptions()
 	addonOptions.extraButtonMap		    = EXTRA_BUTTON_MASK;
 	addonOptions.extraButtonPin		    = EXTRA_BUTTON_PIN;
 	addonOptions.playerNumber           = PLAYER_NUMBER;
+	addonOptions.shmupMode = TURBO_SHMUP_MODE; // Turbo SHMUP Mode
+	addonOptions.shmupMixMode = SHMUP_MIX_MODE; // How we mix turbo and non-turbo buttons
+	addonOptions.shmupAlwaysOn1 = SHMUP_ALWAYS_ON1;
+	addonOptions.shmupAlwaysOn2 = SHMUP_ALWAYS_ON2;
+	addonOptions.shmupAlwaysOn3 = SHMUP_ALWAYS_ON3;
+	addonOptions.shmupAlwaysOn4 = SHMUP_ALWAYS_ON4;
+	addonOptions.pinShmupBtn1 = PIN_SHMUP_BUTTON1;
+	addonOptions.pinShmupBtn2 = PIN_SHMUP_BUTTON2;
+	addonOptions.pinShmupBtn3 = PIN_SHMUP_BUTTON3;
+	addonOptions.pinShmupBtn4 = PIN_SHMUP_BUTTON4;
+	addonOptions.shmupBtnMask1 = SHMUP_BUTTON1;
+	addonOptions.shmupBtnMask2 = SHMUP_BUTTON2;
+	addonOptions.shmupBtnMask3 = SHMUP_BUTTON3;
+	addonOptions.shmupBtnMask4 = SHMUP_BUTTON4;
+	addonOptions.pinShmupDial = PIN_SHMUP_DIAL;
+    addonOptions.sliderSOCDModeOne = SLIDER_SOCD_SLOT_ONE;
+    addonOptions.sliderSOCDModeTwo  = SLIDER_SOCD_SLOT_TWO;
+    addonOptions.sliderSOCDModeDefault = SLIDER_SOCD_SLOT_DEFAULT;
+	addonOptions.wiiExtensionSDAPin    = WII_EXTENSION_I2C_SDA_PIN;
+	addonOptions.wiiExtensionSCLPin    = WII_EXTENSION_I2C_SCL_PIN;
+	addonOptions.wiiExtensionBlock     = (WII_EXTENSION_I2C_BLOCK == i2c0) ? 0 : 1;
+	addonOptions.wiiExtensionSpeed     = WII_EXTENSION_I2C_SPEED;
 	addonOptions.AnalogInputEnabled     = ANALOG_INPUT_ENABLED;
 	addonOptions.BoardLedAddonEnabled   = BOARD_LED_ENABLED;
 	addonOptions.BootselButtonAddonEnabled = BOOTSEL_BUTTON_ENABLED;
@@ -194,9 +217,12 @@ void Storage::setDefaultAddonOptions()
 	addonOptions.I2CAnalog1219InputEnabled = I2C_ANALOG1219_ENABLED;
 	addonOptions.I2CInputExpansionEnabled = I2C_INPUT_EXPANSION_ENABLED;
 	addonOptions.JSliderInputEnabled    = JSLIDER_ENABLED;
+	addonOptions.SliderSOCDInputEnabled    = SLIDER_SOCD_ENABLED;
 	addonOptions.PlayerNumAddonEnabled  = PLAYERNUM_ADDON_ENABLED;
+	addonOptions.PS4ModeAddonEnabled    = PS4MODE_ADDON_ENABLED;
 	addonOptions.ReverseInputEnabled    = REVERSE_ENABLED;
 	addonOptions.TurboInputEnabled      = TURBO_ENABLED;
+	addonOptions.WiiExtensionAddonEnabled      = WII_EXTENSION_ENABLED;
 	setAddonOptions(addonOptions);
 }
 
@@ -212,26 +238,25 @@ void Storage::setAddonOptions(AddonOptions options)
 	}
 }
 
-SplashImage Storage::getSplashImage()
-{
-	return splashImage;
-}
-
 void Storage::setDefaultSplashImage()
 {
 	memcpy(&splashImage.data, &splashImageMain, sizeof(splashImageMain));
 	setSplashImage(splashImage);
 }
 
-void Storage::setSplashImage(SplashImage image)
+void Storage::setSplashImage(const SplashImage& image)
 {
 	if (memcmp(&splashImage, &image, sizeof(SplashImage)) != 0)
 	{
-		image.checksum = CHECKSUM_MAGIC; // set checksum to magic number
-		image.checksum = CRC32::calculate(&image);
-		EEPROM.set(SPLASH_IMAGE_STORAGE_INDEX, image);
-		EEPROM.commit();
 		memcpy(&splashImage, &image, sizeof(SplashImage));
+		splashImage.checksum = CHECKSUM_MAGIC; // set checksum to magic number
+		splashImage.checksum = CRC32::calculate(&splashImage);
+
+		EEPROM.set(SPLASH_IMAGE_STORAGE_INDEX, splashImage);
+		EEPROM.commit();
+
+		// Reset, so that the memcmp gives the correct result on the next call to this function
+		splashImage.checksum = CHECKSUM_MAGIC;
 	}
 }
 
@@ -244,11 +269,6 @@ void Storage::initLEDOptions()
 	if (lastCRC != CRC32::calculate(&ledOptions)) {
 		setDefaultLEDOptions();
 	}
-}
-
-LEDOptions Storage::getLEDOptions()
-{
-	return ledOptions;
 }
 
 void Storage::setDefaultLEDOptions()
@@ -292,6 +312,24 @@ void Storage::setLEDOptions(LEDOptions options)
 	}
 }
 
+void Storage::savePS4Options()     // PS4 Options
+{
+	ps4Options.checksum = NOCHECKSUM_MAGIC;
+	EEPROM.set(PS4_STORAGE_INDEX, ps4Options);
+	EEPROM.commit();
+}
+
+void Storage::setDefaultPS4Options()
+{
+	// Zero everything out
+	memset(&ps4Options, 0, sizeof(PS4Options));
+}
+
+PS4Options * Storage::getPS4Options()
+{
+	return &ps4Options;
+}
+
 void Storage::ResetSettings()
 {
 	EEPROM.reset();
@@ -306,11 +344,6 @@ void Storage::initPreviewBoardOptions()
 void Storage::setPreviewBoardOptions(const BoardOptions& boardOptions)
 {
 	memcpy(&previewBoardOptions, &boardOptions, sizeof(BoardOptions));
-}
-
-BoardOptions Storage::getPreviewBoardOptions()
-{
-	return previewBoardOptions;
 }
 
 void Storage::SetConfigMode(bool mode) { // hack for config mode
@@ -375,6 +408,43 @@ AnimationOptions AnimationStorage::getAnimationOptions()
 		options.chaseCycleTime     = LEDS_CHASE_CYCLE_TIME;
 		options.rainbowCycleTime   = LEDS_RAINBOW_CYCLE_TIME;
 		options.themeIndex         = LEDS_THEME_INDEX;
+		options.hasCustomTheme = false;
+		options.customThemeUp = 0;
+		options.customThemeDown = 0;
+		options.customThemeLeft = 0;
+		options.customThemeRight = 0;
+		options.customThemeB1 = 0;
+		options.customThemeB2 = 0;
+		options.customThemeB3 = 0;
+		options.customThemeB4 = 0;
+		options.customThemeL1 = 0;
+		options.customThemeR1 = 0;
+		options.customThemeL2 = 0;
+		options.customThemeR2 = 0;
+		options.customThemeS1 = 0;
+		options.customThemeS2 = 0;
+		options.customThemeA1 = 0;
+		options.customThemeA2 = 0;
+		options.customThemeL3 = 0;
+		options.customThemeR3 = 0;
+		options.customThemeUpPressed = 0;
+		options.customThemeDownPressed = 0;
+		options.customThemeLeftPressed = 0;
+		options.customThemeRightPressed = 0;
+		options.customThemeB1Pressed = 0;
+		options.customThemeB2Pressed = 0;
+		options.customThemeB3Pressed = 0;
+		options.customThemeB4Pressed = 0;
+		options.customThemeL1Pressed = 0;
+		options.customThemeR1Pressed = 0;
+		options.customThemeL2Pressed = 0;
+		options.customThemeR2Pressed = 0;
+		options.customThemeS1Pressed = 0;
+		options.customThemeS2Pressed = 0;
+		options.customThemeA1Pressed = 0;
+		options.customThemeA2Pressed = 0;
+		options.customThemeL3Pressed = 0;
+		options.customThemeR3Pressed = 0;
 
 		setAnimationOptions(options);
 	}
